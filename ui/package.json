@@ -1,0 +1,19 @@
+{
+  "name": "gogogadgeto-ui",
+  "version": "1.0.0",
+  "description": "React-basierte UI für AI Chat mit WebSocket-Anbindung",
+  "main": "src/main.jsx",
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-syntax-highlighter": "^15.6.1"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}
