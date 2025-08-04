@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -27,6 +28,11 @@ var mutex = &sync.Mutex{}                    // Protect clients map
 var agent compose.Runnable[string, string] // The chat agent
 
 var registerTypesOnce sync.Once
+
+type AgentResult struct {
+	Info      string
+	LLMOutput string
+}
 
 func init() {
 	registerSerializableTypes()
@@ -66,7 +72,24 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 
 // formatForLLMOutputWindow replaces newlines with <br> and wraps the text in a <pre> tag for LLM output
 func formatForLLMOutputWindow(s string) string {
+	fmt.Println("XX s: ", s)
 	return "<pre>" + strings.ReplaceAll(s, "\n", "\n") + "</pre>"
+}
+
+func formatAsJsonForLLMOutputWindow(response string, info *compose.InterruptInfo) string {
+	type Output struct {
+		Response       string                 `json:"response"`
+		ReasoningGraph *compose.InterruptInfo `json:"reasoningGraph"`
+	}
+	out := Output{
+		Response:       response,
+		ReasoningGraph: info,
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return `{"response":"JSON error","reasoning_chain":"","reasoningGraph":{}}`
+	}
+	return string(b)
 }
 
 // Handles a single user message using the agent and returns the response string
@@ -83,17 +106,17 @@ func handleUserMessage(ctx context.Context, userInput string) string {
 	if ok {
 		s := info.State.(*state)
 		response := s.History[len(s.History)-1].Content
-		fmt.Printf("Ergebnis bei der Verarbeitung der Benutzereingabe '%s': %+v\n", userInput, err)
+		fmt.Printf("Result after processing user input: '%s': %+v\n", userInput, err)
 		logResponse(userInput, response) // Log the response
-		return formatForLLMOutputWindow(response)
+		return formatAsJsonForLLMOutputWindow(response, info)
 	}
 	if err != nil {
 		response := "[ChatModel error]: " + err.Error()
-		fmt.Printf("Fehler bei der Verarbeitung der Benutzereingabe '%s': %+v\n", userInput, err)
+		fmt.Printf("Error while processing user input: '%s': %+v\n", userInput, err)
 		logResponse(userInput, response) // Log the error response
-		return formatForLLMOutputWindow(response)
+		return formatAsJsonForLLMOutputWindow(response, info)
 	}
-	return formatForLLMOutputWindow(result)
+	return formatAsJsonForLLMOutputWindow(result, info)
 }
 
 func handleMessages() {
