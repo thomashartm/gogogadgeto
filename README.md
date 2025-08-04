@@ -1,36 +1,4 @@
-# 🔍 GoGo Gadgeto Scanner
-
-```
-       .-""""""-.
-      /          \
-     |  .-""-.    |
-     | /      \   |
-     ||   ()   |  |
-     |\        /  |
-     | \  __  /   |
-     |  '-..-'    |
-     |    ||      |
-     |    ||      |
-     |   _||_     |
-     |  [____]    |
-     |    ||      |
-     |    ||      |
-    /|    ||      |\
-   | |   _||_     | |
-   | |  [____]    | |
-   | |    ||      | |
-   |_|____||______| |
-     |    ||      |
-     |    ||      |
-     \____||_____/
-          ||
-       ___||___
-      [_______]
-   
-   "Go Go Gadget Scanner!"
-```
-
-*An homage to the classic cartoon character Inspector Gadget*
+# 🔍 GoGo Gadgeto Security Tool
 
 An AI-powered security analysis and penetration testing tool with real-time chat interface and integrated tool execution capabilities.
 
