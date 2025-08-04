@@ -1,27 +1,52 @@
-.idea/
-# Go build
-/server/bin/
-/server/build/
+# Go binaries
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
+gogogajeto
+server
+
+# Test binary, built with `go test -c`
 *.test
+
+# Output of the go coverage tool
 *.out
 
-# Go modules
-/server/vendor/
+# Go workspace file
+go.work
 
-# Node.js
-/ui/node_modules/
-server/.env
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# Dependency directories
+vendor/
 
-# Vite build
-/ui/dist/
+# Environment files
+.env
+.env.local
+.env.*.local
 
-# macOS
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Node.js dependencies and build output
+ui/node_modules/
+ui/dist/
+ui/build/
+ui/*.log
+ui/.cache/
+
+# Logs
+*.log
+logs/
