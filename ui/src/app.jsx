@@ -80,10 +80,9 @@ export default function App() {
       const data = JSON.parse(event.data);
       console.log("WebSocket message received:", data);
       const response = data.response;
-      const reasoning = renderInterruptInfo(data.reasoningGraph);
       setMessages(msgs => [...msgs, response]);
       setResponses(responses => [...responses, response]); // Track as AI response
-      setReasoning(r => [...r, `Received: ${JSON.stringify(data.reasoningGraph.response_meta)}`]);
+      setReasoning(r => [...r, `Received: ${JSON.stringify(data.reasoningGraph)}`]);
       setLoading(false);
     };
     ws.current.onclose = () => setReasoning(r => [...r, "WebSocket disconnected"]);
