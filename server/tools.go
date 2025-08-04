@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"github.com/cloudwego/eino/components/model"
-	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"log"
 	"time"
@@ -35,14 +34,16 @@ func newSandbox(ctx context.Context) *sandbox.DockerSandbox {
 
 // Dummy tool fallback
 func newDummyTool() tool.BaseTool {
-	return &dummyTool{}
+	return &dummyTool{Name: "dummy"}
 }
 
-type dummyTool struct{}
+type dummyTool struct {
+	Name string
+}
 
 func (d *dummyTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
-		Name: "dummy",
+		Name: d.Name,
 		// Description field removed for compatibility
 	}, nil
 }
@@ -61,15 +62,6 @@ func newCommandLineTool(ctx context.Context, sb commandline.Operator) []tool.Bas
 		log.Fatal(err)
 	}
 	return []tool.BaseTool{et, pt}
-}
-
-func addTaskNode(g *compose.Graph[string, string]) {
-	err := g.AddLambdaNode(NodeKeyToolsNode, compose.InvokableLambda(func(ctx context.Context, input *schema.Message) (output *schema.Message, err error) {
-		return schema.SystemMessage("[Simulated Task Execution]"), nil
-	}), compose.WithNodeName(NodeKeyToolsNode))
-	if err != nil {
-		log.Fatal("Failed to add TaskNode to the graph: ", err)
-	}
 }
 
 func bindTools(ctx context.Context, cm model.ToolCallingChatModel, tools []tool.BaseTool) model.ToolCallingChatModel {

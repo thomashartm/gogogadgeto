@@ -3,13 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/cloudwego/eino/compose"
-	"github.com/gorilla/websocket"
-	"github.com/joho/godotenv"
+	"log"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/cloudwego/eino/compose"
+	"github.com/gorilla/websocket"
+	"github.com/joho/godotenv"
 )
 
 var upgrader = websocket.Upgrader{
@@ -23,6 +25,20 @@ var broadcast = make(chan []byte)            // Broadcast channel
 var mutex = &sync.Mutex{}                    // Protect clients map
 
 var agent compose.Runnable[string, string] // The chat agent
+
+var registerTypesOnce sync.Once
+
+func init() {
+	registerSerializableTypes()
+}
+
+func registerSerializableTypes() {
+	registerTypesOnce.Do(func() {
+		if err := compose.RegisterSerializableType[state]("my state"); err != nil {
+			log.Fatal(err)
+		}
+	})
+}
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
