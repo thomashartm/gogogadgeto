@@ -139,6 +139,9 @@ func handleMessages() {
 }
 
 func main() {
+	// Print the ASCII art logo
+	fmt.Print(Logo)
+
 	// Load .env file
 	if err := godotenv.Load(".env"); err != nil {
 		fmt.Println("Warning: .env file not found or could not be loaded.")
