@@ -1,0 +1,55 @@
+FROM kalilinux/kali-rolling
+
+LABEL maintainer="gogogadgeto"
+LABEL description="Kali Linux container with pre-installed information gathering tools"
+
+# Update package lists and install essential tools
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        # Network scanning and discovery
+        nmap \
+        # Domain and DNS tools
+        whois \
+        dnsutils \
+        # Network utilities
+        netcat-openbsd \
+        curl \
+        wget \
+        traceroute \
+        net-tools \
+        iputils-ping \
+        # Web vulnerability scanners
+        nikto \
+        dirb \
+        gobuster \
+        # SMB/CIFS and file sharing
+        enum4linux \
+        smbclient \
+        # NFS tools
+        nfs-common \
+        # RPC tools  
+        rpcbind \
+        # Additional useful tools
+        netdiscover \
+        masscan \
+        whatweb \
+        sublist3r \
+        theharvester \
+        # System utilities
+        ca-certificates \
+        && \
+    # Clean up to reduce image size
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
+    # Create workspace directory
+    mkdir -p /workspace
+
+# Set working directory
+WORKDIR /workspace
+
+# Add a health check to verify tools are installed
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD nmap --version && nikto -Version && echo "Tools OK"
+
+# Default command
+CMD ["/bin/bash"] 
