@@ -213,6 +213,25 @@ func (k *KaliInfoGatheringTool) InvokableRun(ctx context.Context, argumentsInJSO
 		command = fmt.Sprintf("%s %s", params.Tool, params.Target)
 	}
 
+	// Tools that may return useful output even with non-zero exit codes
+	// We append "|| true" to ensure exit code 0 while preserving all output
+	toolsWithValidNonZeroOutput := map[string]bool{
+		"whois":      true, // whois returns exit code 1 for "no match" but shows useful info
+		"nmap":       true, // nmap may return exit code 1 for various reasons but still provide scan results
+		"dig":        true, // dig may return exit code 1 for NXDOMAIN but still shows DNS info
+		"nslookup":   true, // nslookup may return exit code 1 for failed lookups but shows info
+		"host":       true, // host may return exit code 1 for failed lookups but shows info
+		"nikto":      true, // nikto may return exit code 1 but still provide scan results
+		"ping":       true, // ping may return exit code 1 for unreachable hosts but shows attempts
+		"traceroute": true, // traceroute may return exit code 1 but shows partial route
+	}
+
+	// For tools that can have useful output with non-zero exit codes, append "|| true"
+	if toolsWithValidNonZeroOutput[params.Tool] {
+		command = command + " || true"
+		util.LogMessage(fmt.Sprintf("Appending '|| true' to command for tool: %s", params.Tool))
+	}
+
 	// Execute command in Kali sandbox using RunCommand
 	result, err := k.sandbox.RunCommand(ctx, command)
 	if err != nil {
