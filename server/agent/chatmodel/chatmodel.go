@@ -32,12 +32,21 @@ func ComposeAgent(ctx context.Context,
 	cm model.BaseChatModel,
 	tools []tool.BaseTool,
 ) compose.Runnable[string, string] {
-	graph := compose.NewGraph[string, string](compose.WithGenLocalState(func(ctx context.Context) *State {
+	g := compose.NewGraph[string, string](compose.WithGenLocalState(func(ctx context.Context) *State {
 		return &State{History: []*schema.Message{}}
 	}))
 
+	// Create tracers for enhanced logging
+	inputTracer := util.NewNodeTracer(NodeKeyInputConvert)
+	chatTracer := util.NewNodeTracer(NodeKeyChatModel)
+	toolsTracer := util.NewNodeTracer(NodeKeyToolsNode)
+	outputTracer := util.NewNodeTracer(NodeKeyOutputConvert)
+
 	// create and register nodes with logging callbacks
-	err := graph.AddLambdaNode(NodeKeyInputConvert, compose.InvokableLambda(func(ctx context.Context, input string) (output []*schema.Message, err error) {
+	err := g.AddLambdaNode(NodeKeyInputConvert, compose.InvokableLambda(func(ctx context.Context, input string) (output []*schema.Message, err error) {
+		// Enhanced logging with tracer
+		inputTracer.SimpleTracePreHandler(ctx, input)
+
 		util.LogMessage("=== InputConvert Node START ===")
 		util.LogMessage("Input: " + input)
 
@@ -49,18 +58,22 @@ func ComposeAgent(ctx context.Context,
 		util.LogMessage(fmt.Sprintf("Generated messages count: %d", len(messages)))
 		util.LogMessage("=== InputConvert Node END ===")
 
+		// Enhanced logging with tracer
+		inputTracer.SimpleTracePostHandler(ctx, messages)
 		return messages, nil
-	}), compose.WithNodeName(NodeKeyInputConvert))
+	}))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = graph.AddChatModelNode(
+	err = g.AddChatModelNode(
 		NodeKeyChatModel,
 		cm,
-		compose.WithNodeName(NodeKeyChatModel),
-		// Pre-handler logging
+		// Pre-handler logging with enhanced tracer
 		compose.WithStatePreHandler(func(ctx context.Context, in []*schema.Message, state *State) ([]*schema.Message, error) {
+			// Enhanced logging with tracer
+			chatTracer.SimpleTracePreHandler(ctx, in)
+
 			util.LogMessage("=== ChatModel Node PRE-HANDLER ===")
 			util.LogMessage(fmt.Sprintf("Input messages count: %d", len(in)))
 			util.LogMessage(fmt.Sprintf("Current history count: %d", len(state.History)))
@@ -94,8 +107,11 @@ func ComposeAgent(ctx context.Context,
 
 			return state.History, nil
 		}),
-		// Post-handler logging
+		// Post-handler logging with enhanced tracer
 		compose.WithStatePostHandler(func(ctx context.Context, out *schema.Message, state *State) (*schema.Message, error) {
+			// Enhanced logging with tracer
+			chatTracer.SimpleTracePostHandler(ctx, out)
+
 			util.LogMessage("=== ChatModel Node POST-HANDLER ===")
 			util.LogMessage("Output message role: " + string(out.Role))
 			util.LogMessage(fmt.Sprintf("Output content length: %d", len(out.Content)))
@@ -124,12 +140,14 @@ func ComposeAgent(ctx context.Context,
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = graph.AddToolsNode(
+	err = g.AddToolsNode(
 		NodeKeyToolsNode,
 		toolsNode,
-		compose.WithNodeName(NodeKeyToolsNode),
-		// Pre-handler for tools
+		// Pre-handler for tools with enhanced tracer
 		compose.WithStatePreHandler(func(ctx context.Context, in *schema.Message, state *State) (*schema.Message, error) {
+			// Enhanced logging with tracer
+			toolsTracer.SimpleTracePreHandler(ctx, in)
+
 			util.LogMessage("=== ToolsNode PRE-HANDLER ===")
 			util.LogMessage("Input message role: " + string(in.Role))
 
@@ -143,8 +161,11 @@ func ComposeAgent(ctx context.Context,
 
 			return in, nil
 		}),
-		// Post-handler for tools
+		// Post-handler for tools with enhanced tracer
 		compose.WithStatePostHandler(func(ctx context.Context, out []*schema.Message, state *State) ([]*schema.Message, error) {
+			// Enhanced logging with tracer
+			toolsTracer.SimpleTracePostHandler(ctx, out)
+
 			util.LogMessage("=== ToolsNode POST-HANDLER ===")
 			util.LogMessage(fmt.Sprintf("Tool execution results count: %d", len(out)))
 
@@ -168,13 +189,13 @@ func ComposeAgent(ctx context.Context,
 		log.Fatal(err)
 	}
 
-	err = graph.AddLambdaNode(NodeKeyHuman, compose.InvokableLambda(func(ctx context.Context, input *schema.Message) (output []*schema.Message, err error) {
+	err = g.AddLambdaNode(NodeKeyHuman, compose.InvokableLambda(func(ctx context.Context, input *schema.Message) (output []*schema.Message, err error) {
 		util.LogMessage("=== Human Node START ===")
 		util.LogMessage("Input message role: " + string(input.Role))
 		util.LogMessage("Input content: " + input.Content)
 
 		return []*schema.Message{input}, nil
-	}), compose.WithNodeName(NodeKeyHuman),
+	}),
 		compose.WithStatePostHandler(func(ctx context.Context, in []*schema.Message, state *State) ([]*schema.Message, error) {
 			util.LogMessage("=== Human Node POST-HANDLER ===")
 			util.LogMessage("UserInput from state: " + state.UserInput)
@@ -192,35 +213,43 @@ func ComposeAgent(ctx context.Context,
 		log.Fatal(err)
 	}
 
-	err = graph.AddLambdaNode(NodeKeyOutputConvert, compose.InvokableLambda(func(ctx context.Context, input []*schema.Message) (output string, err error) {
+	err = g.AddLambdaNode(NodeKeyOutputConvert, compose.InvokableLambda(func(ctx context.Context, input []*schema.Message) (output string, err error) {
+		// Enhanced logging with tracer
+		outputTracer.SimpleTracePreHandler(ctx, input)
+
 		util.LogMessage("=== OutputConvert Node START ===")
 		util.LogMessage(fmt.Sprintf("Input messages count: %d", len(input)))
 
+		var result string
 		if len(input) > 0 {
 			finalContent := input[len(input)-1].Content
 			util.LogMessage(fmt.Sprintf("Final output content length: %d", len(finalContent)))
 			util.LogMessage("=== OutputConvert Node END ===")
-			return finalContent, nil
+			result = finalContent
+		} else {
+			util.LogMessage("No messages to convert")
+			util.LogMessage("=== OutputConvert Node END ===")
+			result = ""
 		}
 
-		util.LogMessage("No messages to convert")
-		util.LogMessage("=== OutputConvert Node END ===")
-		return "", nil
+		// Enhanced logging with tracer
+		outputTracer.SimpleTracePostHandler(ctx, result)
+		return result, nil
 	}))
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// compose graph
-	err = graph.AddEdge(compose.START, NodeKeyInputConvert)
+	err = g.AddEdge(compose.START, NodeKeyInputConvert)
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = graph.AddEdge(NodeKeyInputConvert, NodeKeyChatModel)
+	err = g.AddEdge(NodeKeyInputConvert, NodeKeyChatModel)
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = graph.AddBranch(NodeKeyChatModel, compose.NewGraphBranch(func(ctx context.Context, in *schema.Message) (endNode string, err error) {
+	err = g.AddBranch(NodeKeyChatModel, compose.NewGraphBranch(func(ctx context.Context, in *schema.Message) (endNode string, err error) {
 		if len(in.ToolCalls) > 0 {
 			return NodeKeyToolsNode, nil
 		}
@@ -232,7 +261,7 @@ func ComposeAgent(ctx context.Context,
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = graph.AddBranch(NodeKeyHuman, compose.NewGraphBranch(func(ctx context.Context, in []*schema.Message) (endNode string, err error) {
+	err = g.AddBranch(NodeKeyHuman, compose.NewGraphBranch(func(ctx context.Context, in []*schema.Message) (endNode string, err error) {
 		if in[len(in)-1].Role == schema.User {
 			return NodeKeyChatModel, nil
 		}
@@ -241,16 +270,16 @@ func ComposeAgent(ctx context.Context,
 		NodeKeyChatModel:     true,
 		NodeKeyOutputConvert: true,
 	}))
-	err = graph.AddEdge(NodeKeyToolsNode, NodeKeyChatModel)
+	err = g.AddEdge(NodeKeyToolsNode, NodeKeyChatModel)
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = graph.AddEdge(NodeKeyOutputConvert, compose.END)
+	err = g.AddEdge(NodeKeyOutputConvert, compose.END)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	runner, err := graph.Compile(ctx, compose.WithCheckPointStore(NewInMemoryStore()), compose.WithInterruptBeforeNodes([]string{NodeKeyHuman}))
+	runner, err := g.Compile(ctx, compose.WithCheckPointStore(NewInMemoryStore()), compose.WithInterruptBeforeNodes([]string{NodeKeyHuman}))
 	if err != nil {
 		log.Fatal(err)
 	}
