@@ -2,49 +2,6 @@
 
 An AI-powered security analysis and penetration testing tool with real-time chat interface, integrated security tools, and containerized execution environments.
 
-## 🚀 Features
-
-### 🎯 **Core Capabilities**
-- **Real-time AI Chat Interface** - Interactive WebSocket-based communication with AI assistant
-- **Advanced Security Toolset** - Pre-built Kali Linux container with 24+ security tools
-- **Code Execution Environment** - Dual sandboxed environments (Python + Kali Linux)
-- **Session Management** - Persistent chat sessions with auto-save functionality
-- **Enhanced Tool Flow Visualization** - Real-time reasoning and tool execution tracking
-- **Smart Preset Commands** - Pre-configured security analysis prompts
-- **Responsive Resizable UI** - Modern React interface with adjustable panels
-
-### 🛡️ **Security Tools Available**
-- **Network Scanning**: nmap, masscan, netdiscover
-- **DNS/Domain Analysis**: whois, dig, nslookup, host
-- **Web Application Testing**: nikto, dirb, gobuster, whatweb
-- **Network Utilities**: curl, wget, netcat, traceroute, ping
-- **Enumeration**: enum4linux, sublist3r, theharvester
-- **File Sharing Analysis**: smbclient, showmount, rpcinfo
-- **And many more!**
-
-### 🎨 **Enhanced User Interface**
-- **Color-Coded Chat** - User messages (green) vs AI responses (blue)
-- **Resizable Panels** - Drag to adjust chat and tool flow panel sizes
-- **Compact Design** - Optimized font sizes and spacing
-- **Tool Flow Panel** - Clear button and improved formatting
-- **Session Persistence** - Panel layouts and settings saved
-
-## 🏗️ Architecture
-
-### Backend (Go)
-- **WebSocket Server** - Real-time communication using Gorilla WebSocket
-- **AI Integration** - Powered by Cloudwego Eino framework with OpenAI
-- **Dual Sandboxed Execution** - Docker-based Python + Kali Linux environments
-- **Tool Management** - Dynamic tool registration and execution system
-- **Unique Session Handling** - Isolated conversation contexts
-
-### Frontend (React)
-- **Component-based Architecture** - Modular UI components with modern hooks
-- **Real-time Updates** - WebSocket integration for live chat and tool execution
-- **Advanced Session Persistence** - Chat history, panel layouts, and preferences
-- **Syntax Highlighting** - Code formatting with react-syntax-highlighter
-- **Responsive Design** - Adjustable panels and optimized layouts
-
 ## 📋 Prerequisites
 
 - **Go** 1.19 or higher
@@ -150,26 +107,6 @@ Enhanced preset commands for common security tasks:
 - **Session isolation** - each conversation starts fresh
 - **Export capabilities** for analysis results
 
-## 🔐 Internal Security Features
-
-### 🛡️ **Sandboxed Execution**
-- **Dual environments**: Python sandbox + Kali Linux container
-- **Network-enabled Kali**: For information gathering and scanning
-- **Isolated Python**: For code execution and analysis
-- **Resource limits**: CPU, memory, and timeout constraints
-
-### 🐳 **Pre-built Kali Container**
-- **24+ security tools** pre-installed and ready
-- **Optimized image**: ~800MB with tool verification
-- **Fast startup**: ~10 seconds (vs 5+ minutes for runtime installation)
-- **Health checks**: Automatic tool verification
-
-### 🔒 **Security Measures**
-- **Container isolation**: All tools run in separate containers
-- **Input sanitization**: All user inputs properly validated
-- **Session isolation**: Each conversation uses unique checkpoints
-- **Resource monitoring**: CPU and memory limits enforced
-
 ## 🧪 Development
 
 ### 🛠️ **Adding New Security Tools**
@@ -183,17 +120,6 @@ Enhanced preset commands for common security tasks:
 2. Add new preset objects with descriptive names
 3. Include example targets and proper syntax
 4. UI automatically updates with new presets
-
-### 🎨 **Customizing the Interface**
-- **Panel behavior**: Modify `ResizableDivider.jsx`
-- **Chat styling**: Update `ChatPanel.jsx` color schemes
-- **Tool flow display**: Enhance `ToolFlowPanel.jsx` formatting
-- **Layout persistence**: Extend `sessionManager.js`
-
-### 🔄 **Backend Development**
-- **Agent composition**: Modify `server/agent/chatmodel/chatmodel.go`
-- **Tool integration**: Extend `server/agent/tools/tools.go`
-- **Prompt engineering**: Update `server/agent/prompts/prompts.go`
 
 ## 🐳 Container Documentation
 
