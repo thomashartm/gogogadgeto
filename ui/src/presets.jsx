@@ -34,6 +34,26 @@ export const promptPresets = [
         id: "log-analysis",
         name: "Log Analysis",
         prompt: "Analyze system logs for suspicious activities and security events. Identify patterns that might indicate compromise or attack attempts."
+    },
+    {
+        id: "nmap-scan",
+        name: "Nmap Port Scan",
+        prompt: "Use nmap to scan 192.168.1.1 for open services"
+    },
+    {
+        id: "whois-lookup",
+        name: "Domain Whois Lookup",
+        prompt: "Get whois information for example.com"
+    },
+    {
+        id: "dns-mx-lookup",
+        name: "DNS MX Records",
+        prompt: "Perform a DNS lookup for the MX records of google.com"
+    },
+    {
+        id: "nikto-vuln-scan",
+        name: "Nikto Vulnerability Scan",
+        prompt: "Use nikto to scan http://testsite.com for vulnerabilities"
     }
 ];
 

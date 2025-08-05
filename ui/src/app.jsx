@@ -3,11 +3,36 @@ import ChatPanel from "./components/ChatPanel";
 import ToolFlowPanel from "./components/ToolFlowPanel";
 import ResultsPanel from "./components/ResultsPanel";
 import TopMenu from "./components/TopMenu";
+import ResizableDivider from "./components/ResizableDivider";
 import { SessionManager } from "./utils/sessionManager";
 import {renderInterruptInfo} from "./utils/rendering";
 
 // Load environment variables for Vite
 const WS_ENDPOINT = import.meta.env.VITE_WS_ENDPOINT || "ws://localhost:8080/ws";
+
+// Helper function to redact content fields in history
+function redactHistoryFields(obj) {
+  if (obj === null || obj === undefined) return obj;
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => redactHistoryFields(item));
+  }
+  
+  if (typeof obj === 'object') {
+    const newObj = {};
+    for (const key in obj) {
+      if (key === 'content') {
+        // Replace content with boolean indicator
+        newObj[key] = obj[key] && obj[key].trim().length > 0;
+      } else {
+        newObj[key] = redactHistoryFields(obj[key]);
+      }
+    }
+    return newObj;
+  }
+  
+  return obj;
+}
 
 export default function App() {
   const [messages, setMessages] = useState([]);
@@ -17,6 +42,7 @@ export default function App() {
   const [selectedMessages, setSelectedMessages] = useState([]);
   const [tableData, setTableData] = useState([]);
   const [sessionInfo, setSessionInfo] = useState(null);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(50); // Default 50% for chat panel
   const ws = useRef(null);
 
   // Auto-save session data
@@ -27,7 +53,8 @@ export default function App() {
         responses, // Include responses in session data
         reasoning,
         tableData,
-        selectedMessages
+        selectedMessages,
+        leftPanelWidth
       };
       
       SessionManager.saveSession(sessionData);
@@ -82,7 +109,13 @@ export default function App() {
       const response = data.response;
       setMessages(msgs => [...msgs, response]);
       setResponses(responses => [...responses, response]); // Track as AI response
-      setReasoning(r => [...r, `Received: ${JSON.stringify(data.reasoningGraph)}`]);
+      
+      // Keep reasoning as original JSON, only redact history content fields
+      setReasoning(r => [...r, `Reasoning: ${JSON.stringify(data.reasoning)}`]);
+      
+      const historyWithRedactedFields = redactHistoryFields(data.history);
+      setReasoning(r => [...r, `History: ${JSON.stringify(historyWithRedactedFields)}`]);
+      
       setLoading(false);
     };
     ws.current.onclose = () => setReasoning(r => [...r, "WebSocket disconnected"]);
@@ -128,14 +161,26 @@ export default function App() {
     setReasoning(sessionData.reasoning || ["Initial reasoning..."]);
     setTableData(sessionData.tableData || []);
     setSelectedMessages(sessionData.selectedMessages || []);
+    setLeftPanelWidth(sessionData.leftPanelWidth || 50); // Restore panel width, default to 50%
     setSessionInfo(SessionManager.getSessionInfo());
+  };
+
+  const handleClearReasoning = () => {
+    setReasoning([]);
+  };
+
+  const handlePanelResize = (newLeftWidth) => {
+    setLeftPanelWidth(newLeftWidth);
   };
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
       <TopMenu onLoadSession={handleLoadSession} sessionInfo={sessionInfo} />
-      <div className="flex flex-1 min-h-0">
-        <div className="w-1/2 border-r bg-white flex flex-col min-h-0">
+      <div className="flex flex-1 min-h-0 resizable-container">
+        <div 
+          className="bg-white flex flex-col min-h-0 border-r"
+          style={{ width: `${leftPanelWidth}%` }}
+        >
           <ChatPanel 
             onSend={sendMessage} 
             messages={messages} 
@@ -144,8 +189,12 @@ export default function App() {
             selectedMessages={selectedMessages}
           />
         </div>
-        <div className="w-1/2 flex flex-col min-h-0">
-          <ToolFlowPanel reasoning={reasoning} />
+        <ResizableDivider onResize={handlePanelResize} />
+        <div 
+          className="flex flex-col min-h-0"
+          style={{ width: `${100 - leftPanelWidth}%` }}
+        >
+          <ToolFlowPanel reasoning={reasoning} onClear={handleClearReasoning} />
         </div>
       </div>
       <div className="h-48 flex-shrink-0">
