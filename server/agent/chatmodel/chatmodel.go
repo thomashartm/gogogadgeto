@@ -32,12 +32,12 @@ func ComposeAgent(ctx context.Context,
 	cm model.BaseChatModel,
 	tools []tool.BaseTool,
 ) compose.Runnable[string, string] {
-	g := compose.NewGraph[string, string](compose.WithGenLocalState(func(ctx context.Context) *State {
+	graph := compose.NewGraph[string, string](compose.WithGenLocalState(func(ctx context.Context) *State {
 		return &State{History: []*schema.Message{}}
 	}))
 
 	// create and register nodes with logging callbacks
-	err := g.AddLambdaNode(NodeKeyInputConvert, compose.InvokableLambda(func(ctx context.Context, input string) (output []*schema.Message, err error) {
+	err := graph.AddLambdaNode(NodeKeyInputConvert, compose.InvokableLambda(func(ctx context.Context, input string) (output []*schema.Message, err error) {
 		util.LogMessage("=== InputConvert Node START ===")
 		util.LogMessage("Input: " + input)
 
@@ -55,7 +55,7 @@ func ComposeAgent(ctx context.Context,
 		log.Fatal(err)
 	}
 
-	err = g.AddChatModelNode(
+	err = graph.AddChatModelNode(
 		NodeKeyChatModel,
 		cm,
 		compose.WithNodeName(NodeKeyChatModel),
@@ -124,7 +124,7 @@ func ComposeAgent(ctx context.Context,
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = g.AddToolsNode(
+	err = graph.AddToolsNode(
 		NodeKeyToolsNode,
 		toolsNode,
 		compose.WithNodeName(NodeKeyToolsNode),
@@ -168,7 +168,7 @@ func ComposeAgent(ctx context.Context,
 		log.Fatal(err)
 	}
 
-	err = g.AddLambdaNode(NodeKeyHuman, compose.InvokableLambda(func(ctx context.Context, input *schema.Message) (output []*schema.Message, err error) {
+	err = graph.AddLambdaNode(NodeKeyHuman, compose.InvokableLambda(func(ctx context.Context, input *schema.Message) (output []*schema.Message, err error) {
 		util.LogMessage("=== Human Node START ===")
 		util.LogMessage("Input message role: " + string(input.Role))
 		util.LogMessage("Input content: " + input.Content)
@@ -192,7 +192,7 @@ func ComposeAgent(ctx context.Context,
 		log.Fatal(err)
 	}
 
-	err = g.AddLambdaNode(NodeKeyOutputConvert, compose.InvokableLambda(func(ctx context.Context, input []*schema.Message) (output string, err error) {
+	err = graph.AddLambdaNode(NodeKeyOutputConvert, compose.InvokableLambda(func(ctx context.Context, input []*schema.Message) (output string, err error) {
 		util.LogMessage("=== OutputConvert Node START ===")
 		util.LogMessage(fmt.Sprintf("Input messages count: %d", len(input)))
 
@@ -212,15 +212,15 @@ func ComposeAgent(ctx context.Context,
 	}
 
 	// compose graph
-	err = g.AddEdge(compose.START, NodeKeyInputConvert)
+	err = graph.AddEdge(compose.START, NodeKeyInputConvert)
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = g.AddEdge(NodeKeyInputConvert, NodeKeyChatModel)
+	err = graph.AddEdge(NodeKeyInputConvert, NodeKeyChatModel)
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = g.AddBranch(NodeKeyChatModel, compose.NewGraphBranch(func(ctx context.Context, in *schema.Message) (endNode string, err error) {
+	err = graph.AddBranch(NodeKeyChatModel, compose.NewGraphBranch(func(ctx context.Context, in *schema.Message) (endNode string, err error) {
 		if len(in.ToolCalls) > 0 {
 			return NodeKeyToolsNode, nil
 		}
@@ -232,7 +232,7 @@ func ComposeAgent(ctx context.Context,
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = g.AddBranch(NodeKeyHuman, compose.NewGraphBranch(func(ctx context.Context, in []*schema.Message) (endNode string, err error) {
+	err = graph.AddBranch(NodeKeyHuman, compose.NewGraphBranch(func(ctx context.Context, in []*schema.Message) (endNode string, err error) {
 		if in[len(in)-1].Role == schema.User {
 			return NodeKeyChatModel, nil
 		}
@@ -241,16 +241,16 @@ func ComposeAgent(ctx context.Context,
 		NodeKeyChatModel:     true,
 		NodeKeyOutputConvert: true,
 	}))
-	err = g.AddEdge(NodeKeyToolsNode, NodeKeyChatModel)
+	err = graph.AddEdge(NodeKeyToolsNode, NodeKeyChatModel)
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = g.AddEdge(NodeKeyOutputConvert, compose.END)
+	err = graph.AddEdge(NodeKeyOutputConvert, compose.END)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	runner, err := g.Compile(ctx, compose.WithCheckPointStore(NewInMemoryStore()), compose.WithInterruptBeforeNodes([]string{NodeKeyHuman}))
+	runner, err := graph.Compile(ctx, compose.WithCheckPointStore(NewInMemoryStore()), compose.WithInterruptBeforeNodes([]string{NodeKeyHuman}))
 	if err != nil {
 		log.Fatal(err)
 	}
