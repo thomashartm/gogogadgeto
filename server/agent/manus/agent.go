@@ -1,11 +1,13 @@
-package chatmodel
+package model
 
 import (
 	"context"
 	"fmt"
 	"log"
 
+	"gogogajeto/agent/common"
 	"gogogajeto/agent/prompts"
+	"gogogajeto/agent/tools"
 	"gogogajeto/util"
 
 	"github.com/cloudwego/eino/components/model"
@@ -13,12 +15,6 @@ import (
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 )
-
-type State struct {
-	History   []*schema.Message
-	UserInput string
-	Name      string
-}
 
 const (
 	NodeKeyHuman         = "Human"
@@ -28,12 +24,54 @@ const (
 	NodeKeyOutputConvert = "OutputConverter"
 )
 
-func ComposeAgent(ctx context.Context,
+// CreateAgent creates and configures a complete agent with Python and Kali tools
+func CreateAgent() compose.Runnable[string, string] {
+	util.LogMessage("=== AGENT CREATION START ===")
+	ctx := context.Background()
+
+	// init Python sandbox and tools
+	util.LogMessage("Creating Python sandbox...")
+	pythonSb := tools.NewSandbox(ctx)
+	//defer pythonSb.Cleanup(ctx)
+
+	util.LogMessage("Creating Python command line tools...")
+	pythonTools := tools.NewCommandLineTool(ctx, pythonSb)
+	util.LogMessage(fmt.Sprintf("Created %d Python tools", len(pythonTools)))
+
+	// init Kali Linux sandbox and tools
+	util.LogMessage("Creating Kali Linux sandbox...")
+	kaliSb := tools.NewKaliSandbox(ctx)
+	//defer kaliSb.Cleanup(ctx)
+
+	util.LogMessage("Creating Kali information gathering tools...")
+	kaliTools := tools.NewKaliCommandLineTool(ctx, kaliSb)
+	util.LogMessage(fmt.Sprintf("Created %d Kali tools", len(kaliTools)))
+
+	// Combine all tools
+	allTools := append(pythonTools, kaliTools...)
+	util.LogMessage(fmt.Sprintf("Total tools available: %d", len(allTools)))
+
+	// init chat model and bind tools
+	util.LogMessage("Creating chat model...")
+	cm := tools.NewChatModel(ctx)
+
+	util.LogMessage("Binding all tools to chat model...")
+	cm = tools.BindTools(ctx, cm, allTools)
+
+	// create agent
+	util.LogMessage("Composing agent...")
+	agent := composeAgent(ctx, cm, allTools)
+
+	util.LogMessage("=== AGENT CREATION COMPLETE ===")
+	return agent
+}
+
+func composeAgent(ctx context.Context,
 	cm model.BaseChatModel,
 	tools []tool.BaseTool,
 ) compose.Runnable[string, string] {
-	g := compose.NewGraph[string, string](compose.WithGenLocalState(func(ctx context.Context) *State {
-		return &State{History: []*schema.Message{}}
+	g := compose.NewGraph[string, string](compose.WithGenLocalState(func(ctx context.Context) *common.State {
+		return &common.State{History: []*schema.Message{}}
 	}))
 
 	// Create tracers for enhanced logging
@@ -70,7 +108,7 @@ func ComposeAgent(ctx context.Context,
 		NodeKeyChatModel,
 		cm,
 		// Pre-handler logging with enhanced tracer
-		compose.WithStatePreHandler(func(ctx context.Context, in []*schema.Message, state *State) ([]*schema.Message, error) {
+		compose.WithStatePreHandler(func(ctx context.Context, in []*schema.Message, state *common.State) ([]*schema.Message, error) {
 			// Enhanced logging with tracer
 			chatTracer.SimpleTracePreHandler(ctx, in)
 
@@ -108,7 +146,7 @@ func ComposeAgent(ctx context.Context,
 			return state.History, nil
 		}),
 		// Post-handler logging with enhanced tracer
-		compose.WithStatePostHandler(func(ctx context.Context, out *schema.Message, state *State) (*schema.Message, error) {
+		compose.WithStatePostHandler(func(ctx context.Context, out *schema.Message, state *common.State) (*schema.Message, error) {
 			// Enhanced logging with tracer
 			chatTracer.SimpleTracePostHandler(ctx, out)
 
@@ -144,7 +182,7 @@ func ComposeAgent(ctx context.Context,
 		NodeKeyToolsNode,
 		toolsNode,
 		// Pre-handler for tools with enhanced tracer
-		compose.WithStatePreHandler(func(ctx context.Context, in *schema.Message, state *State) (*schema.Message, error) {
+		compose.WithStatePreHandler(func(ctx context.Context, in *schema.Message, state *common.State) (*schema.Message, error) {
 			// Enhanced logging with tracer
 			toolsTracer.SimpleTracePreHandler(ctx, in)
 
@@ -162,7 +200,7 @@ func ComposeAgent(ctx context.Context,
 			return in, nil
 		}),
 		// Post-handler for tools with enhanced tracer
-		compose.WithStatePostHandler(func(ctx context.Context, out []*schema.Message, state *State) ([]*schema.Message, error) {
+		compose.WithStatePostHandler(func(ctx context.Context, out []*schema.Message, state *common.State) ([]*schema.Message, error) {
 			// Enhanced logging with tracer
 			toolsTracer.SimpleTracePostHandler(ctx, out)
 
@@ -196,7 +234,7 @@ func ComposeAgent(ctx context.Context,
 
 		return []*schema.Message{input}, nil
 	}),
-		compose.WithStatePostHandler(func(ctx context.Context, in []*schema.Message, state *State) ([]*schema.Message, error) {
+		compose.WithStatePostHandler(func(ctx context.Context, in []*schema.Message, state *common.State) ([]*schema.Message, error) {
 			util.LogMessage("=== Human Node POST-HANDLER ===")
 			util.LogMessage("UserInput from state: " + state.UserInput)
 
@@ -217,20 +255,7 @@ func ComposeAgent(ctx context.Context,
 		// Enhanced logging with tracer
 		outputTracer.SimpleTracePreHandler(ctx, input)
 
-		util.LogMessage("=== OutputConvert Node START ===")
-		util.LogMessage(fmt.Sprintf("Input messages count: %d", len(input)))
-
-		var result string
-		if len(input) > 0 {
-			finalContent := input[len(input)-1].Content
-			util.LogMessage(fmt.Sprintf("Final output content length: %d", len(finalContent)))
-			util.LogMessage("=== OutputConvert Node END ===")
-			result = finalContent
-		} else {
-			util.LogMessage("No messages to convert")
-			util.LogMessage("=== OutputConvert Node END ===")
-			result = ""
-		}
+		result := extractLastMessage(input)
 
 		// Enhanced logging with tracer
 		outputTracer.SimpleTracePostHandler(ctx, result)
@@ -287,20 +312,18 @@ func ComposeAgent(ctx context.Context,
 	return runner
 }
 
-func NewInMemoryStore() *InMemoryStore {
-	return &InMemoryStore{m: make(map[string][]byte)}
-}
-
-type InMemoryStore struct {
-	m map[string][]byte
-}
-
-func (i *InMemoryStore) Get(ctx context.Context, checkPointID string) ([]byte, bool, error) {
-	data, ok := i.m[checkPointID]
-	return data, ok, nil
-}
-
-func (i *InMemoryStore) Set(ctx context.Context, checkPointID string, checkPoint []byte) error {
-	i.m[checkPointID] = checkPoint
-	return nil
+func extractLastMessage(input []*schema.Message) string {
+	util.LogMessage("=== OutputConvert Node START ===")
+	util.LogMessage(fmt.Sprintf("Input messages count: %d", len(input)))
+	var result string
+	if len(input) > 0 {
+		finalContent := input[len(input)-1].Content
+		util.LogMessage(fmt.Sprintf("Final output content length: %d", len(finalContent)))
+		result = finalContent
+	} else {
+		util.LogMessage("No messages to convert")
+		result = ""
+	}
+	util.LogMessage("=== OutputConvert Node END ===")
+	return result
 }

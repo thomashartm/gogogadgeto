@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"gogogajeto/agent/chatmodel"
-	"gogogajeto/agent/tools"
+	"gogogajeto/agent/common"
+	manus "gogogajeto/agent/manus"
 	"gogogajeto/util"
 
 	"github.com/cloudwego/eino/compose"
@@ -78,7 +78,7 @@ func init() {
 
 func registerSerializableTypes() {
 	registerTypesOnce.Do(func() {
-		if err := compose.RegisterSerializableType[chatmodel.State]("my state"); err != nil {
+		if err := compose.RegisterSerializableType[common.State]("my state"); err != nil {
 			log.Fatal(err)
 		}
 	})
@@ -229,7 +229,7 @@ func handleUserMessage(ctx context.Context, userInput string) string {
 	result, err := agent.Invoke(ctx, userInput,
 		compose.WithCheckPointID(checkpointID),
 		compose.WithStateModifier(func(ctx context.Context, path compose.NodePath, s any) error {
-			s.(*chatmodel.State).UserInput = userInput
+			s.(*common.State).UserInput = userInput
 			return nil
 		}),
 		compose.WithRuntimeMaxSteps(20),
@@ -240,7 +240,7 @@ func handleUserMessage(ctx context.Context, userInput string) string {
 	info, ok := compose.ExtractInterruptInfo(err)
 	if ok {
 		util.LogMessage("=== INTERRUPT INFO EXTRACTED ===")
-		s := info.State.(*chatmodel.State)
+		s := info.State.(*common.State)
 
 		util.LogMessage(fmt.Sprintf("Conversation history length: %d", len(s.History)))
 		if len(s.History) > 0 {
@@ -288,47 +288,6 @@ func handleMessages() {
 	}
 }
 
-func createAgent() compose.Runnable[string, string] {
-	util.LogMessage("=== AGENT CREATION START ===")
-	ctx := context.Background()
-
-	// init Python sandbox and tools
-	util.LogMessage("Creating Python sandbox...")
-	pythonSb := tools.NewSandbox(ctx)
-	//defer pythonSb.Cleanup(ctx)
-
-	util.LogMessage("Creating Python command line tools...")
-	pythonTools := tools.NewCommandLineTool(ctx, pythonSb)
-	util.LogMessage(fmt.Sprintf("Created %d Python tools", len(pythonTools)))
-
-	// init Kali Linux sandbox and tools
-	util.LogMessage("Creating Kali Linux sandbox...")
-	kaliSb := tools.NewKaliSandbox(ctx)
-	//defer kaliSb.Cleanup(ctx)
-
-	util.LogMessage("Creating Kali information gathering tools...")
-	kaliTools := tools.NewKaliCommandLineTool(ctx, kaliSb)
-	util.LogMessage(fmt.Sprintf("Created %d Kali tools", len(kaliTools)))
-
-	// Combine all tools
-	allTools := append(pythonTools, kaliTools...)
-	util.LogMessage(fmt.Sprintf("Total tools available: %d", len(allTools)))
-
-	// init chat model and bind tools
-	util.LogMessage("Creating chat model...")
-	cm := tools.NewChatModel(ctx)
-
-	util.LogMessage("Binding all tools to chat model...")
-	cm = tools.BindTools(ctx, cm, allTools)
-
-	// create agent
-	util.LogMessage("Composing agent...")
-	agent := chatmodel.ComposeAgent(ctx, cm, allTools)
-
-	util.LogMessage("=== AGENT CREATION COMPLETE ===")
-	return agent
-}
-
 func main() {
 	// Print the ASCII art logo
 	fmt.Print(Logo)
@@ -346,7 +305,7 @@ func main() {
 
 	var err error
 
-	agent = createAgent()
+	agent = manus.CreateAgent()
 
 	http.HandleFunc("/ws", wsHandler)
 	go handleMessages() // optional, falls Broadcast benötigt
