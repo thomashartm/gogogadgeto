@@ -12,11 +12,44 @@ The Kali container (`gogogadgeto/kali-tools`) provides a pre-built environment w
 
 - **Network Scanning**: nmap, masscan, netdiscover
 - **DNS/Domain**: whois, dig, nslookup, host
-- **Web Testing**: nikto, dirb, gobuster, whatweb
+- **Web Testing**: nikto, dirb, gobuster (with wordlists), whatweb
 - **Network Utils**: curl, wget, netcat, traceroute, ping
 - **Enumeration**: enum4linux, sublist3r, theharvester
 - **File Sharing**: smbclient, showmount
 - **System Tools**: net-tools, rpcbind
+
+### Wordlists & Security Data
+
+The container includes comprehensive wordlists for brute force and fuzzing:
+
+- **DIRB Lists** (`/usr/share/wordlists/dirb/`):
+  - `common.txt` - Common web directories (35KB) - **Default for gobuster**
+  - `big.txt` - Large directory list (180KB)
+  - Various language-specific lists
+
+- **SecLists** (`/usr/share/wordlists/seclists/`):
+  - `Discovery/Web-Content/` - Web content discovery
+  - `Fuzzing/` - Various fuzzing wordlists  
+  - `Passwords/` - Password lists for brute force
+  - `Payloads/` - Security payload collections
+
+- **Password Lists**:
+  - `rockyou.txt` - Popular passwords (140MB, extracted)
+
+#### Wordlist Usage Examples
+```bash
+# Gobuster with default DIRB common list
+gobuster dir -u http://target.com -w /usr/share/wordlists/dirb/common.txt
+
+# Gobuster with larger DIRB list  
+gobuster dir -u http://target.com -w /usr/share/wordlists/dirb/big.txt
+
+# Gobuster with SecLists
+gobuster dir -u http://target.com -w /usr/share/wordlists/seclists/Discovery/Web-Content/common.txt
+
+# DIRB with custom wordlist
+dirb http://target.com /usr/share/wordlists/dirb/big.txt
+```
 
 ### Building the Container
 
@@ -58,6 +91,10 @@ docker run --rm gogogadgeto/kali-tools nmap --version
 # Test nikto
 docker run --rm gogogadgeto/kali-tools nikto -Version
 
+# Test gobuster and wordlists
+docker run --rm gogogadgeto/kali-tools gobuster --help
+docker run --rm gogogadgeto/kali-tools test -f /usr/share/wordlists/dirb/common.txt && echo "Wordlists OK"
+
 # Interactive shell
 docker run --rm -it gogogadgeto/kali-tools /bin/bash
 ```
@@ -73,10 +110,11 @@ Image: "gogogadgeto/kali-tools:latest"
 ### Container Details
 
 - **Base Image**: kalilinux/kali-rolling
-- **Size**: ~800MB (optimized)
+- **Size**: ~2.8GB (includes comprehensive wordlists)
 - **Working Dir**: /workspace
-- **Health Check**: Verifies nmap and nikto are working
+- **Health Check**: Verifies tools and wordlists are available
 - **Network**: Enabled for information gathering
+- **Wordlists**: Pre-extracted and ready to use
 
 ### Build Time
 

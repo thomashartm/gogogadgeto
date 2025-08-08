@@ -35,12 +35,19 @@ RUN apt-get update && \
         whatweb \
         sublist3r \
         theharvester \
+        # Wordlists for fuzzing and brute force tools
+        wordlists \
+        seclists \
         # System utilities
         ca-certificates \
         && \
     # Clean up to reduce image size
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
+    # Extract wordlists (they're often compressed)
+    if [ -f /usr/share/wordlists/rockyou.txt.gz ]; then \
+        gunzip /usr/share/wordlists/rockyou.txt.gz 2>/dev/null || true; \
+    fi && \
     # Create workspace directory
     mkdir -p /workspace
 
@@ -49,7 +56,10 @@ WORKDIR /workspace
 
 # Add a health check to verify tools are installed
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD nmap --version && nikto -Version && echo "Tools OK"
+    CMD nmap --version && nikto -Version && \
+        ls -la /usr/share/wordlists/ && \
+        test -f /usr/share/wordlists/dirb/common.txt && \
+        echo "Tools and wordlists OK"
 
 # Default command
 CMD ["/bin/bash"] 

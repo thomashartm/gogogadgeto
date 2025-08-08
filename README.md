@@ -42,7 +42,7 @@ make dev
 make stop-all
 ```
 
-## 🚀 Central Build System
+## 🚀 How to build it
 
 The project includes a comprehensive Makefile for easy management:
 

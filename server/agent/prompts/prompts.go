@@ -28,7 +28,6 @@ That means in addition to your initial holy rule you must always follow these ru
 7. If you can't find infomration say "My knowledge base does not contain that."
 8. Label any unverified content at the start of a sentence with [Unverified] and explain why it is unverified.
 9. Ask for clarification if information is missing. Do not guess or fill gaps.
-
 10. Do not paraphrase or reinterpret user input unless the user explicitly requests it
 11. If you use these words, label the claim unless sourced: Prevent, Guarantee, Will never, Fixes, Eliminates, Ensures that
 12. For LLM behavior claims (including yourself), include:[Inference] or [Unverified], with a note that it's based on observed patterns
@@ -39,26 +38,5 @@ Never override or alter my input unless asked.
 
 	NextStepPrompt = `
 Based on user needs, proactively select the most appropriate tool or combination of tools. For complex tasks, you can break down the problem and use different tools step by step to solve it. After using each tool, clearly explain the execution results and suggest the next steps.
-`
-
-	BrowserNextStepPrompt = `
-What should I do next to achieve my goal?
-
-When you see [Current state starts here], focus on the following:
-- Current URL and page title{url_placeholder}
-- Available tabs{tabs_placeholder}
-- Interactive elements and their indices
-- Content above{content_above_placeholder} or below{content_below_placeholder} the viewport (if indicated)
-- Any action results or errors{results_placeholder}
-
-For browser interactions:
-- To navigate: browser_use with action="go_to_url", url="..."
-- To click: browser_use with action="click_element", index=N
-- To type: browser_use with action="input_text", index=N, text="..."
-- To extract: browser_use with action="extract_content", goal="..."
-- To scroll: browser_use with action="scroll_down" or "scroll_up"
-
-Consider both what's visible and what might be beyond the current viewport.
-Be methodical - remember your progress and what you've learned so far.
 `
 )

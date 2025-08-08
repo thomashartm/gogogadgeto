@@ -56,7 +56,7 @@ var KaliInfoGatheringTools = map[string]string{
 	"nc":           "Netcat for network connections (netcat-openbsd)",
 	"nikto":        "Web vulnerability scanner",
 	"dirb":         "Web directory brute forcer",
-	"gobuster":     "Directory/file brute forcer",
+	"gobuster":     "Directory/file brute forcer with comprehensive wordlists",
 	"whatweb":      "Web technology identification",
 	"enum4linux":   "Linux/Samba enumeration tool",
 	"smbclient":    "SMB client for file sharing",
@@ -64,6 +64,14 @@ var KaliInfoGatheringTools = map[string]string{
 	"rpcinfo":      "RPC services information (from rpcbind)",
 	"sublist3r":    "Subdomain enumeration tool",
 	"theharvester": "Email and subdomain harvester",
+}
+
+// Available wordlists in the container
+var AvailableWordlists = map[string]string{
+	"dirb/common.txt": "Common web directories (DIRB default)",
+	"dirb/big.txt":    "Large directory list (DIRB)",
+	"seclists/Discovery/Web-Content/common.txt": "Common web content (SecLists)",
+	"rockyou.txt": "Popular passwords list",
 }
 
 // KaliInfoGatheringTool implements a Kali Linux information gathering tool
@@ -84,6 +92,12 @@ func (k *KaliInfoGatheringTool) Info(ctx context.Context) (*schema.ToolInfo, err
 		toolsList = append(toolsList, fmt.Sprintf("%s: %s", tool, desc))
 	}
 
+	// Create wordlists information
+	var wordlistsList []string
+	for wordlist, desc := range AvailableWordlists {
+		wordlistsList = append(wordlistsList, fmt.Sprintf("%s: %s", wordlist, desc))
+	}
+
 	description := fmt.Sprintf(`Kali Linux Information Gathering Tool
 
 This tool provides access to information gathering and reconnaissance tools from Kali Linux.
@@ -91,8 +105,11 @@ This tool provides access to information gathering and reconnaissance tools from
 Available tools:
 %s
 
+Available wordlists:
+%s
+
 Usage:
-- tool: The information gathering tool to use (e.g., "nmap", "whois", "dig")
+- tool: The information gathering tool to use (e.g., "nmap", "whois", "dig", "gobuster")
 - target: The target to investigate (IP address, domain, URL, etc.)
 - options: Additional command line options for the tool (optional)
 
@@ -101,8 +118,14 @@ Examples:
 - {"tool": "whois", "target": "example.com"}
 - {"tool": "dig", "target": "example.com", "options": "MX"}
 - {"tool": "nikto", "target": "http://example.com"}
+- {"tool": "gobuster", "target": "http://example.com"} (uses default dir mode + common wordlist)
+- {"tool": "gobuster", "target": "http://example.com", "options": "-w /usr/share/wordlists/dirb/big.txt"}
+- {"tool": "gobuster", "target": "http://example.com", "options": "dir -w /usr/share/wordlists/seclists/Discovery/Web-Content/common.txt"}
+- {"tool": "gobuster", "target": "example.com", "options": "dns -w /usr/share/wordlists/seclists/Discovery/DNS/bitquark-subdomains-top100000.txt"}
+- {"tool": "dirb", "target": "http://example.com"} (uses default common wordlist)
+- {"tool": "dirb", "target": "http://example.com", "options": "/usr/share/wordlists/dirb/big.txt"}
 
-Security Notice: This tool is for authorized security testing only. Ensure you have permission before scanning any targets.`, strings.Join(toolsList, "\n"))
+Security Notice: This tool is for authorized security testing only. Ensure you have permission before scanning any targets.`, strings.Join(toolsList, "\n"), strings.Join(wordlistsList, "\n"))
 
 	return &schema.ToolInfo{
 		Name: "kali_info_gathering",
@@ -140,12 +163,40 @@ func (k *KaliInfoGatheringTool) InvokableRun(ctx context.Context, argumentsInJSO
 		return "", fmt.Errorf("tool '%s' is not available. Available tools: %s", params.Tool, strings.Join(availableTools, ", "))
 	}
 
-	// Build command
+	// Build command with special handling for different tools
 	var command string
-	if params.Options != "" {
-		command = fmt.Sprintf("%s %s %s", params.Tool, params.Options, params.Target)
-	} else {
-		command = fmt.Sprintf("%s %s", params.Tool, params.Target)
+
+	switch params.Tool {
+	case "gobuster":
+		// Gobuster requires specific syntax: gobuster <mode> -u <url> [options]
+		// Default to 'dir' mode if no mode specified in options
+		if params.Options != "" {
+			// Check if mode is already specified in options
+			if strings.Contains(params.Options, "dir") || strings.Contains(params.Options, "dns") || strings.Contains(params.Options, "vhost") || strings.Contains(params.Options, "fuzz") {
+				command = fmt.Sprintf("%s %s -u %s", params.Tool, params.Options, params.Target)
+			} else {
+				// Default to dir mode and append options
+				command = fmt.Sprintf("%s dir -u %s %s", params.Tool, params.Target, params.Options)
+			}
+		} else {
+			// Default gobuster dir scan with common wordlist
+			command = fmt.Sprintf("%s dir -u %s -w /usr/share/wordlists/dirb/common.txt", params.Tool, params.Target)
+		}
+	case "dirb":
+		// DIRB syntax: dirb <url> [wordlist] [options]
+		if params.Options != "" {
+			command = fmt.Sprintf("%s %s %s", params.Tool, params.Target, params.Options)
+		} else {
+			// Default dirb with common wordlist
+			command = fmt.Sprintf("%s %s /usr/share/wordlists/dirb/common.txt", params.Tool, params.Target)
+		}
+	default:
+		// Standard command format for other tools
+		if params.Options != "" {
+			command = fmt.Sprintf("%s %s %s", params.Tool, params.Options, params.Target)
+		} else {
+			command = fmt.Sprintf("%s %s", params.Tool, params.Target)
+		}
 	}
 
 	// Tools that may return useful output even with non-zero exit codes
