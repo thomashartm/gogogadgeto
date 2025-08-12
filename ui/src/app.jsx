@@ -43,6 +43,8 @@ export default function App() {
   const [tableData, setTableData] = useState([]);
   const [sessionInfo, setSessionInfo] = useState(null);
   const [leftPanelWidth, setLeftPanelWidth] = useState(50); // Default 50% for chat panel
+  const [backendSessionId, setBackendSessionId] = useState(null);
+  const [useBackendSession, setUseBackendSession] = useState(true); // Toggle between WebSocket and Backend sessions
   const ws = useRef(null);
 
   // Auto-save session data
@@ -57,7 +59,8 @@ export default function App() {
         leftPanelWidth
       };
       
-      SessionManager.saveSession(sessionData);
+      // Use the new enhanced session saving method
+      SessionManager.saveSessionData(sessionData);
       setSessionInfo(SessionManager.getSessionInfo());
     };
 
@@ -101,37 +104,99 @@ export default function App() {
     restoreSession();
   }, []);
 
+  // Initialize backend session
   useEffect(() => {
-    ws.current = new WebSocket(WS_ENDPOINT);
-    ws.current.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      console.log("WebSocket message received:", data);
-      const response = data.response;
-      setMessages(msgs => [...msgs, response]);
-      setResponses(responses => [...responses, response]); // Track as AI response
-      
-      // Keep reasoning as original JSON, only redact history content fields
-      setReasoning(r => [...r, `Reasoning: ${JSON.stringify(data.reasoning)}`]);
-      
-      const historyWithRedactedFields = redactHistoryFields(data.history);
-      setReasoning(r => [...r, `History: ${JSON.stringify(historyWithRedactedFields)}`]);
-      
-      setLoading(false);
+    const initializeBackendSession = async () => {
+      if (useBackendSession) {
+        // Check if we have an existing session ID
+        const existingSessionId = SessionManager.getBackendSessionId();
+        if (existingSessionId) {
+          setBackendSessionId(existingSessionId);
+          setReasoning(r => [...r, `Using existing backend session: ${existingSessionId}`]);
+        } else {
+          // Create a new backend session
+          const session = await SessionManager.createBackendSession();
+          if (session) {
+            setBackendSessionId(session.sessionId);
+            setReasoning(r => [...r, `Created new backend session: ${session.sessionId}`]);
+          } else {
+            setReasoning(r => [...r, "Failed to create backend session, falling back to WebSocket"]);
+            setUseBackendSession(false);
+          }
+        }
+      }
     };
-    ws.current.onclose = () => setReasoning(r => [...r, "WebSocket disconnected"]);
-    ws.current.onerror = (e) => setReasoning(r => [...r, "WebSocket error"]);
-    return () => ws.current && ws.current.close();
-  }, []);
 
-  const sendMessage = (msg) => {
-    if (ws.current && ws.current.readyState === 1) {
-      ws.current.send(msg);
-      setMessages(msgs => [...msgs, `You: ${msg}`]);
-      setReasoning(r => [...r, `Sent: ${msg}`]);
-      setLoading(true);
-    } else {
-      setReasoning(r => [...r, "WebSocket not connected"]);
+    initializeBackendSession();
+  }, [useBackendSession]);
+
+  // WebSocket connection (fallback or legacy mode)
+  useEffect(() => {
+    if (!useBackendSession) {
+      ws.current = new WebSocket(WS_ENDPOINT);
+      ws.current.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log("WebSocket message received:", data);
+        const response = data.response;
+        setMessages(msgs => [...msgs, response]);
+        setResponses(responses => [...responses, response]); // Track as AI response
+        
+        // Keep reasoning as original JSON, only redact history content fields
+        setReasoning(r => [...r, `Reasoning: ${JSON.stringify(data.reasoning)}`]);
+        
+        const historyWithRedactedFields = redactHistoryFields(data.history);
+        setReasoning(r => [...r, `History: ${JSON.stringify(historyWithRedactedFields)}`]);
+        
+        setLoading(false);
+      };
+      ws.current.onclose = () => setReasoning(r => [...r, "WebSocket disconnected"]);
+      ws.current.onerror = (e) => setReasoning(r => [...r, "WebSocket error"]);
+      return () => ws.current && ws.current.close();
     }
+  }, [useBackendSession]);
+
+  const sendMessage = async (msg) => {
+    setLoading(true);
+    setMessages(msgs => [...msgs, `You: ${msg}`]);
+    setReasoning(r => [...r, `Sent: ${msg}`]);
+
+    if (useBackendSession && backendSessionId) {
+      // Use backend session API
+      try {
+        const result = await SessionManager.sendMessageToBackend(msg, backendSessionId);
+        if (result) {
+          console.log("Backend session response:", result);
+          
+          // Parse the response which is in the same format as WebSocket
+          const data = JSON.parse(result.response);
+          const response = data.response;
+          setMessages(msgs => [...msgs, response]);
+          setResponses(responses => [...responses, response]);
+          
+          // Keep reasoning as original JSON, only redact history content fields
+          setReasoning(r => [...r, `Reasoning: ${JSON.stringify(data.reasoning)}`]);
+          
+          const historyWithRedactedFields = redactHistoryFields(data.history);
+          setReasoning(r => [...r, `History: ${JSON.stringify(historyWithRedactedFields)}`]);
+          
+          // Update session ID if it changed
+          if (result.sessionId && result.sessionId !== backendSessionId) {
+            setBackendSessionId(result.sessionId);
+          }
+        } else {
+          setReasoning(r => [...r, "Failed to send message to backend session"]);
+        }
+      } catch (error) {
+        setReasoning(r => [...r, `Backend session error: ${error.message}`]);
+      }
+    } else if (ws.current && ws.current.readyState === 1) {
+      // Use WebSocket (fallback mode)
+      ws.current.send(msg);
+    } else {
+      setReasoning(r => [...r, "No connection available (neither backend session nor WebSocket)"]);
+    }
+    
+    setLoading(false);
   };
 
   const handleSelectMessage = (index) => {
@@ -163,6 +228,53 @@ export default function App() {
     setSelectedMessages(sessionData.selectedMessages || []);
     setLeftPanelWidth(sessionData.leftPanelWidth || 50); // Restore panel width, default to 50%
     setSessionInfo(SessionManager.getSessionInfo());
+    
+    // If there's a backend session ID in the loaded data, restore it
+    const sessionString = localStorage.getItem(SessionManager.SESSION_KEY);
+    if (sessionString) {
+      try {
+        const session = JSON.parse(sessionString);
+        if (session.backendSessionId) {
+          setBackendSessionId(session.backendSessionId);
+          localStorage.setItem(SessionManager.BACKEND_SESSION_KEY, session.backendSessionId);
+          setReasoning(r => [...r, `Restored backend session: ${session.backendSessionId}`]);
+        }
+      } catch (error) {
+        console.error('Failed to restore backend session ID:', error);
+      }
+    }
+  };
+
+  const handleClearSession = async () => {
+    // Clear both frontend and backend sessions
+    const confirmed = window.confirm("Are you sure you want to clear the current session? This will remove all conversation history.");
+    if (confirmed) {
+      // Clear backend session
+      if (backendSessionId) {
+        await SessionManager.clearBackendSession(backendSessionId);
+        setBackendSessionId(null);
+      }
+      
+      // Clear frontend state
+      setMessages([]);
+      setResponses([]);
+      setReasoning(["Session cleared"]);
+      setTableData([]);
+      setSelectedMessages([]);
+      
+      // Clear local storage
+      SessionManager.clearSession();
+      setSessionInfo(null);
+      
+      // Create a new backend session if we're using backend sessions
+      if (useBackendSession) {
+        const session = await SessionManager.createBackendSession();
+        if (session) {
+          setBackendSessionId(session.sessionId);
+          setReasoning(r => [...r, `Created new backend session: ${session.sessionId}`]);
+        }
+      }
+    }
   };
 
   const handleClearReasoning = () => {
@@ -175,7 +287,14 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
-      <TopMenu onLoadSession={handleLoadSession} sessionInfo={sessionInfo} />
+      <TopMenu 
+        onLoadSession={handleLoadSession} 
+        sessionInfo={sessionInfo}
+        onClearSession={handleClearSession}
+        backendSessionId={backendSessionId}
+        useBackendSession={useBackendSession}
+        onToggleSessionMode={() => setUseBackendSession(!useBackendSession)}
+      />
       <div className="flex flex-1 min-h-0 resizable-container">
         <div 
           className="bg-white flex flex-col min-h-0 border-r"

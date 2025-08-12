@@ -1,7 +1,9 @@
-// Session Manager for Local Storage persistence
+// Session Manager for Local Storage persistence and Backend Session Management
 export class SessionManager {
   static SESSION_KEY = 'gogogadgeto_session';
+  static BACKEND_SESSION_KEY = 'gogogadgeto_backend_session_id';
   static AUTO_SAVE_INTERVAL = 30000; // 30 seconds
+  static API_BASE = 'http://localhost:8080/api/session';
 
   static saveSession(sessionData) {
     try {
@@ -138,5 +140,148 @@ export class SessionManager {
 
       reader.readAsText(file);
     });
+  }
+
+  // Backend session management methods
+  static async createBackendSession() {
+    try {
+      const response = await fetch(`${this.API_BASE}/new`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const session = await response.json();
+      
+      // Store session ID in local storage
+      localStorage.setItem(this.BACKEND_SESSION_KEY, session.sessionId);
+      console.log('Backend session created:', session.sessionId);
+      
+      return session;
+    } catch (error) {
+      console.error('Failed to create backend session:', error);
+      return null;
+    }
+  }
+
+  static getBackendSessionId() {
+    return localStorage.getItem(this.BACKEND_SESSION_KEY);
+  }
+
+  static async sendMessageToBackend(message, sessionId = null) {
+    try {
+      const currentSessionId = sessionId || this.getBackendSessionId();
+      
+      const response = await fetch(`${this.API_BASE}/message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId: currentSessionId,
+          message: message
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      // Update stored session ID if it changed (e.g., new session was created)
+      if (result.sessionId && result.sessionId !== currentSessionId) {
+        localStorage.setItem(this.BACKEND_SESSION_KEY, result.sessionId);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Failed to send message to backend:', error);
+      return null;
+    }
+  }
+
+  static async getBackendSessionHistory(sessionId = null) {
+    try {
+      const currentSessionId = sessionId || this.getBackendSessionId();
+      if (!currentSessionId) {
+        return null;
+      }
+
+      const response = await fetch(`${this.API_BASE}/${currentSessionId}/history`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get backend session history:', error);
+      return null;
+    }
+  }
+
+  static async clearBackendSession(sessionId = null) {
+    try {
+      const currentSessionId = sessionId || this.getBackendSessionId();
+      if (!currentSessionId) {
+        return true;
+      }
+
+      const response = await fetch(`${this.API_BASE}/${currentSessionId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Clear local storage
+      localStorage.removeItem(this.BACKEND_SESSION_KEY);
+      console.log('Backend session cleared');
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to clear backend session:', error);
+      return false;
+    }
+  }
+
+  static saveSessionData(sessionData) {
+    // Enhanced session data saving that includes backend session ID
+    try {
+      const session = {
+        timestamp: Date.now(),
+        version: '1.0',
+        backendSessionId: this.getBackendSessionId(),
+        data: {
+          messages: sessionData.messages || [],
+          reasoning: sessionData.reasoning || [],
+          tableData: sessionData.tableData || [],
+          selectedMessages: sessionData.selectedMessages || [],
+          responses: sessionData.responses || []
+        }
+      };
+      
+      localStorage.setItem(this.SESSION_KEY, JSON.stringify(session));
+      console.log('Enhanced session saved successfully with backend session ID');
+      return true;
+    } catch (error) {
+      console.error('Failed to save enhanced session:', error);
+      return false;
+    }
   }
 } 

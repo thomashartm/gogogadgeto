@@ -88,8 +88,9 @@ func composeAgent(ctx context.Context,
 		util.LogMessage("=== InputConvert Node START ===")
 		util.LogMessage("Input: " + input)
 
+		// Only add new user message - don't recreate system message every time
+		// The system message should only be added once at the start of conversation
 		messages := []*schema.Message{
-			schema.SystemMessage(prompts.SystemPrompt),
 			schema.UserMessage(input),
 		}
 
@@ -116,6 +117,14 @@ func composeAgent(ctx context.Context,
 			util.LogMessage(fmt.Sprintf("Input messages count: %d", len(in)))
 			util.LogMessage(fmt.Sprintf("Current history count: %d", len(state.History)))
 
+			// Initialize with system message if this is a new conversation (empty history)
+			if len(state.History) == 0 {
+				util.LogMessage("New conversation detected - adding system message")
+				systemMsg := schema.SystemMessage(prompts.SystemPrompt)
+				state.History = append(state.History, systemMsg)
+			}
+
+			// Add new messages to history
 			state.History = append(state.History, in...)
 
 			util.LogMessage(fmt.Sprintf("Updated history count: %d", len(state.History)))
@@ -174,7 +183,7 @@ func composeAgent(ctx context.Context,
 		log.Fatal(err)
 	}
 
-	toolsNode, err := compose.NewToolNode(ctx, &compose.ToolsNodeConfig{Tools: append(tools)})
+	toolsNode, err := compose.NewToolNode(ctx, &compose.ToolsNodeConfig{Tools: tools})
 	if err != nil {
 		log.Fatal(err)
 	}

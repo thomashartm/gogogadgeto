@@ -1,7 +1,14 @@
 import React, { useState, useRef } from "react";
 import { SessionManager } from "../utils/sessionManager";
 
-function SessionControls({ onLoadSession, sessionInfo }) {
+function SessionControls({ 
+  onLoadSession, 
+  sessionInfo, 
+  onClearSession, 
+  backendSessionId, 
+  useBackendSession, 
+  onToggleSessionMode 
+}) {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importError, setImportError] = useState("");
   const fileInputRef = useRef(null);
@@ -22,10 +29,14 @@ function SessionControls({ onLoadSession, sessionInfo }) {
   };
 
   const handleClearSession = () => {
-    if (window.confirm('Are you sure you want to clear the current session? This action cannot be undone.')) {
-      SessionManager.clearSession();
-      // Reload the page to reset all state
-      window.location.reload();
+    if (onClearSession) {
+      onClearSession();
+    } else {
+      // Fallback to legacy behavior
+      if (window.confirm('Are you sure you want to clear the current session? This action cannot be undone.')) {
+        SessionManager.clearSession();
+        window.location.reload();
+      }
     }
   };
 
@@ -78,6 +89,19 @@ function SessionControls({ onLoadSession, sessionInfo }) {
 
   return (
     <div className="flex items-center space-x-2">
+      {/* Backend Session Toggle */}
+      <button 
+        onClick={onToggleSessionMode}
+        className={`px-2 py-1 rounded text-xs ${
+          useBackendSession 
+            ? 'bg-green-600 hover:bg-green-700' 
+            : 'bg-yellow-600 hover:bg-yellow-700'
+        }`}
+        title={`Currently using: ${useBackendSession ? 'Backend Sessions' : 'WebSocket'}`}
+      >
+        {useBackendSession ? '🔗 Backend' : '🌐 WebSocket'}
+      </button>
+
       {/* Session Info Display */}
       {sessionInfo && (
         <div className="text-xs text-gray-300 mr-2">
